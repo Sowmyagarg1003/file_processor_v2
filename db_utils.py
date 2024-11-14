@@ -1,8 +1,6 @@
 import pandas as pd
 import psycopg2
-
 from config import DB_CONFIG
-
 
 def get_db_connection():
     return psycopg2.connect(**DB_CONFIG)
@@ -10,8 +8,19 @@ def get_db_connection():
 def create_table_from_csv(file_path, table_name):
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # Read the headers of the CSV file to get column names
     df_headers = pd.read_csv(file_path, nrows=1)
-    create_query = f"CREATE TABLE IF NOT EXISTS {table_name} (" + ', '.join([f'"{col}" TEXT' for col in df_headers.columns]) + ');'
+    
+    # Create the table with 'table_s_no' as a serial primary key and other columns as text
+    create_query = f"""
+    CREATE TABLE IF NOT EXISTS {table_name} (
+        table_s_no SERIAL PRIMARY KEY,
+        {', '.join([f'"{col}" TEXT' for col in df_headers.columns])}
+    );
+    """
+    
+    # Execute the CREATE TABLE query
     cursor.execute(create_query)
     conn.commit()
     conn.close()
@@ -23,7 +32,7 @@ def insert_into_db(file_path, table_name):
     total_rows_inserted = 0
 
     for chunk in pd.read_csv(file_path, chunksize=chunk_size):
-        #insert statement for chunk
+        # Insert statement for chunk
         columns = ', '.join([f'"{col}"' for col in chunk.columns])
         placeholders = ', '.join(['%s'] * len(chunk.columns))
         insert_query = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
@@ -48,17 +57,16 @@ def insert_into_db(file_path, table_name):
     conn.close()
     print(f"All data from {file_path} inserted into table {table_name} in chunks of {chunk_size} rows.")
 
-
-
-#def retrieve_file_link(table_name, file_name):
-#    try:
-#        conn = get_db_connection()
-  #      cursor = conn.cursor()
-#        query = f"SELECT file_name FROM {table_name} WHERE file_name = %s"
- #       cursor.execute(query, (file_name,))
-#        result = cursor.fetchone()
-#        conn.close()
- #       return result[0] if result else None
- #   except Exception as e:
- #       print(f"Error retrieving file link: {e}")
-  #      return None#
+# Optional commented-out code for retrieving file link
+# def retrieve_file_link(table_name, file_name):
+#     try:
+#         conn = get_db_connection()
+#         cursor = conn.cursor()
+#         query = f"SELECT file_name FROM {table_name} WHERE file_name = %s"
+#         cursor.execute(query, (file_name,))
+#         result = cursor.fetchone()
+#         conn.close()
+#         return result[0] if result else None
+#     except Exception as e:
+#         print(f"Error retrieving file link: {e}")
+#         return None
