@@ -12,7 +12,7 @@ def create_table_from_csv(file_path, table_name):
     # Read the headers of the CSV file to get column names
     df_headers = pd.read_csv(file_path, nrows=1)
     
-    # Create the table with 'table_s_no' as a serial primary key and other columns as text
+    #table_s_no column as primary key
     create_query = f"""
     CREATE TABLE IF NOT EXISTS {table_name} (
         table_s_no SERIAL PRIMARY KEY,
@@ -20,7 +20,6 @@ def create_table_from_csv(file_path, table_name):
     );
     """
     
-    # Execute the CREATE TABLE query
     cursor.execute(create_query)
     conn.commit()
     conn.close()
