@@ -132,26 +132,29 @@ DROP TABLE IF EXISTS table_name;
 
 The application performs the following validation checks on each CSV file:
 
-1. Encoding Detection: Detects the file encoding using chardet.
+1. Encoding Detection: Detects the file encoding using chardet to ensure proper parsing.
    
 2. Delimiter Validation: Ensures the file uses the expected delimiter (default is a comma).
    
-3. Empty Column Analysis: Calculates the percentage of missing values in each column.
+3. Column Count Consistency: Ensures each row contains the same number of columns as defined in the header.
  
-4. Column Count Consistency: Verifies that each row has the same number of columns as the header.
+4. Header Validation: Detects missing column headers (empty header names) and also flags duplicate column names.
    
-5. Header Validation: Checks for missing or duplicate column headers.
+5. Duplicate Rows: Checks the file for any duplicate rows and flags them.
    
-6. Empty Values Threshold: Flags columns that exceed a specified missing values threshold (default is 30%).
+6. Data Type Validation: Validates that specific columns (e.g., "Age", "Salary") contain only numeric values. Rows with invalid data types are flagged.
     
-7. Duplicate Rows: Detects any duplicate rows in the file.
+7. Double Commas Check: Detects occurrences of double commas (,,) within data fields, which indicate potential data issues.
     
-8. Data Type Validation: Checks that columns with numeric data types contain only numeric values.
+8. Regex Validation for Specific Columns: Applies regular expressions to validate data formats in specific columns:
+
+Email: Checks for valid email addresses.
+Phone: Validates phone numbers.
+URL: Verifies URL formats.
+Date: Ensures the format is YYYY-MM-DD.
     
-9. Double Commas Check: Detects double commas within data fields.
-    
-10. Email Format Validation: Uses a regular expression to validate email formats in the specified column.
-    
+9. Chunk-Based Processing: Processes large files in manageable chunks (default is 100 rows per chunk) to optimize memory usage and scalability.
+        
 Each of these checks ensures the data quality before processing and storage. Files failing any of these validations are moved to the /error folder.
 
 ## Database Schema
