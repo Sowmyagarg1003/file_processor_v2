@@ -148,12 +148,15 @@ The application performs the following validation checks on each CSV file:
     
 8. Regex Validation for Specific Columns: Applies regular expressions to validate data formats in specific columns:
 
-Email: Checks for valid email addresses.
-Phone: Validates phone numbers.
-URL: Verifies URL formats.
-Date: Ensures the format is YYYY-MM-DD.
+      Email: Checks for valid email addresses.
+   
+      Phone: Validates phone numbers.
+   
+      URL: Verifies URL formats.
+   
+      Date: Ensures the format is YYYY-MM-DD.
     
-9. Chunk-Based Processing: Processes large files in manageable chunks (default is 100 rows per chunk) to optimize memory usage and scalability.
+10. Chunk-Based Processing: Processes large files in manageable chunks (default is 100 rows per chunk) to optimize memory usage and scalability.
         
 Each of these checks ensures the data quality before processing and storage. Files failing any of these validations are moved to the /error folder.
 
