@@ -1,7 +1,11 @@
+import os
 import time
-from watchdog.observers import Observer
+
 from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+
 from file_utils import process_file
+
 
 class Handler(FileSystemEventHandler):
     def on_created(self, event):
@@ -14,6 +18,10 @@ class Watcher:
         self.path = path
 
     def run(self):
+        # Process already existing files in the folder
+        self.process_existing_files()
+
+        # Now start watching for new files
         event_handler = Handler()
         self.observer.schedule(event_handler, self.path, recursive=True)
         self.observer.start()
@@ -23,3 +31,10 @@ class Watcher:
         except KeyboardInterrupt:
             self.observer.stop()
         self.observer.join()
+
+    def process_existing_files(self):
+        # Iterate over existing files in the directory
+        for filename in os.listdir(self.path):
+            file_path = os.path.join(self.path, filename)
+            if os.path.isfile(file_path):
+                process_file(file_path)

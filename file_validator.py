@@ -1,36 +1,28 @@
-import csv
 import re
+
 import chardet
 import pandas as pd
 
-
-#Empty columns
-def analyze_empty_columns(df):
-    missing_data = df.isnull().mean() * 100
-    columns_with_missing = missing_data[missing_data > 0]
-    
-    print("Missing values analysis:")
-    for col, percent in columns_with_missing.items():
-        print(f"Column '{col}' has {percent:.2f}% missing values.")
-    
-    return columns_with_missing
-
-
-#Same elements as columns
+#rows have same number of columns as header
 def validate_column_count(df):
-    num_columns = len(df.columns)
-    return df.apply(lambda row: len(row) == num_columns, axis=1).all()
+    expected_columns = len(df.columns)
+    for idx, row in df.iterrows():
+        filtered_row = [value for value in row if value != '']
+        if len(filtered_row) != expected_columns:
+            print(f"Error: Row {idx + 1} has an incorrect number of columns. Expected {expected_columns}, got {len(filtered_row)}.")
+            return False
+    return True
 
 
-#missing or duplicate columns
+#missing and duplicate column names
 def validate_headers(df):
-    #missing
+    # Missing
     empty_columns = [col for col in df.columns if col.strip() == '']
     if empty_columns:
         print(f"Error: The following columns have no header names: {empty_columns}")
         return False
 
-    #duplicate
+    # Duplicate
     duplicate_columns = df.columns[df.columns.duplicated()]
     if duplicate_columns.any():
         print(f"Error: Duplicate columns found: {duplicate_columns.tolist()}")
@@ -40,67 +32,59 @@ def validate_headers(df):
     return True
 
 
-#check for missing values
-def validate_empty_values(df, threshold=0.3):
-    total_rows = len(df)
-    max_missing_threshold = threshold * total_rows
-    has_exceeding_missing_values = False
-
-    for col in df.columns:
-        missing_count = df[col].isnull().sum()
-        if missing_count > max_missing_threshold:
-            print(f"Column '{col}' has {missing_count} missing values, exceeding {threshold * 100}% threshold.")
-            has_exceeding_missing_values = True
-    
-    if has_exceeding_missing_values:
-        print("Warning: Some columns have missing values exceeding the defined threshold, but the file will still be validated.")
-    
-    return True
-
-
-
-# Check for duplicate rows
+#duplicate rows
 def validate_duplicates(df):
     if df.duplicated().any():
         print("CSV file contains duplicate rows.")
         return False
     return True
 
-
-#check for valid numeric values
-def validate_data_types(df):
+#validates columns which should be numeric only
+def validate_numeric_data(df, numeric_fields):
     for col in df.columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            if not pd.to_numeric(df[col], errors='coerce').notnull().all():
-                print(f"Column {col} contains non-numeric values.")
+        print(f"Column '{col}' dtype: {df[col].dtype}")
+        
+        if col in numeric_fields:
+            print(f"Validating column '{col}' for numeric values...")
+            invalid_rows = df.loc[pd.to_numeric(df[col], errors='coerce').isna() & df[col].notna()]
+            
+            if not invalid_rows.empty:
+                print(f"Column '{col}' contains non-numeric values at rows: {invalid_rows.index.tolist()}")
                 return False
+
+    print("All specified numeric columns are valid.")
     return True
 
 
-#delimeter check
-def validate_delimiter(file_path, expected_delimiter=','):
-    with open(file_path, 'r') as f:
-        sniffer = csv.Sniffer()
-        dialect = sniffer.sniff(f.read())
-        if dialect.delimiter != expected_delimiter:
-            print(f"Invalid delimiter found. Expected '{expected_delimiter}' but got '{dialect.delimiter}'.")
+#only comma delimiter
+def validate_delimiter(df, expected_delimiter=','):
+    for row_number, row in enumerate(df.itertuples(index=False), start=1):
+        line = ','.join(map(str, row))
+        if expected_delimiter not in line:
+            print(f"Error: Row {row_number} does not use '{expected_delimiter}' as a delimiter consistently.")
             return False
+    print(f"All rows consistently use '{expected_delimiter}' as the delimiter.")
     return True
 
 
-# Regex validation for emails
-def validate_regex(df, column_name, regex_pattern):
+def validate_regex(df, column_name):
+    regex_patterns = {
+        'Email': r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$',
+        'Phone': r'^\+?[1-9]\d{1,14}$',
+        'URL': r'^(https?|ftp)://[^\s/$.?#].[^\s]*$',
+        'Date': r'^\d{4}-\d{2}-\d{2}$'  # YYYY-MM-DD
+    }
+
     if column_name in df.columns:
-        regex = re.compile(regex_pattern)
-        if df[column_name].apply(lambda x: isinstance(x, str) and not regex.match(x) if pd.notna(x) else False).any():
-            print(f"Column '{column_name}' contains values that don't match the regex pattern '{regex_pattern}'.")
+        regex = re.compile(regex_patterns.get(column_name, ""))
+        invalid_rows = df[column_name].apply(
+            lambda x: isinstance(x, str) and not regex.match(x) if pd.notna(x) else False
+        )
+        if invalid_rows.any():
+            print(f"Column '{column_name}' contains invalid values at rows: {invalid_rows.index.tolist()}.")
             return False
-    else:
-        print(f"Column '{column_name}' not found for regex validation.")
     return True
 
-
-# Check for double commas
 def validate_double_commas(df):
     for col in df.columns:
         if df[col].apply(lambda x: isinstance(x, str) and ',,' in x).any():
@@ -109,62 +93,54 @@ def validate_double_commas(df):
     return True
 
 
-
 def validate_csv(file_path):
     try:
         print("Starting CSV validation...")
 
-        # Detect encoding
+        #encoding
         with open(file_path, 'rb') as f:
             result = chardet.detect(f.read())
             encoding = result['encoding']
         print(f"Detected encoding: {encoding}")
 
-        # Check the delimiter
-        if not validate_delimiter(file_path):
-            print("Delimiter validation failed")
-            return False
-
+        #chunk
         chunk_size = 100
         chunk_number = 1
 
-        # Read the CSV with detected encoding
-        for chunk in pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding):
+        # Process the file in chunks
+        for chunk in pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding, keep_default_na=False):
+            print(chunk)
             print(f"\nProcessing chunk {chunk_number} with {len(chunk)} rows")
 
-
-        for chunk in pd.read_csv(file_path, chunksize=chunk_size):
-            print(f"\nProcessing chunk {chunk_number} with {len(chunk)} rows")
-
-            # Analyzing empty columns
-            empty_columns_analysis = analyze_empty_columns(chunk)
-            print("Missing values analysis:")
-            print(empty_columns_analysis)
-
-            #multiple validation checks
+            # Validate column count
             if not validate_column_count(chunk):
-                print(f"Column count validation failed in chunk {chunk_number}")
-                return False
+                raise ValueError(f"Validation error: Column count validation failed in chunk {chunk_number}")
 
-            if not validate_empty_values(chunk, threshold=0.3):
-                print(f"Empty values validation failed in chunk {chunk_number}")
+            # Validate headers (only for the first chunk)
+            if chunk_number == 1 and not validate_headers(chunk):
+                raise ValueError("Validation error: Header validation failed.")
 
+            # Validate duplicates
             if not validate_duplicates(chunk):
-                print(f"Duplicate rows validation failed in chunk {chunk_number}")
-                return False
+                raise ValueError(f"Validation error: Duplicate rows validation failed in chunk {chunk_number}")
 
+            # Validate the delimiter
+            if not validate_delimiter(chunk):
+                raise ValueError(f"Validation error: Delimiter validation failed in chunk {chunk_number}")
+
+            # Perform regex validations for specific columns
+            for column in ["Email", "Phone", "URL", "Date"]:
+                if column in chunk.columns and not validate_regex(chunk, column):
+                    raise ValueError(f"Validation error: Regex validation failed for column '{column}' in chunk {chunk_number}")
+
+            # Validate data types for numeric columns
+            numeric_fields = ["Age", "Salary", "Price", "Quantity", "Height", "Weight", "Distance", "Marks"]
+            if not validate_numeric_data(chunk, numeric_fields):
+                
+                raise ValueError(f"Validation error: Data type validation failed in chunk {chunk_number}")
+            
             if not validate_double_commas(chunk):
-                print(f"Double commas validation failed in chunk {chunk_number}")
-                return False
-
-            email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-            if not validate_regex(chunk, "Email", email_regex):
-                print(f"Regex validation (Email format) failed in chunk {chunk_number}")
-                return False
-
-            if not validate_data_types(chunk):
-                print(f"Data type validation failed in chunk {chunk_number}")
-                return False
+                raise ValueError(f"Double commas validation failed in chunk {chunk_number}")
 
             print(f"Chunk {chunk_number} passed all validations")
             chunk_number += 1
@@ -172,6 +148,9 @@ def validate_csv(file_path):
         print(f"\nCSV file '{file_path}' passed all validations")
         return True
 
+    except ValueError as ve:
+        print(ve)
+        return False
     except pd.errors.EmptyDataError:
         print("Error: The CSV file is empty.")
         return False
